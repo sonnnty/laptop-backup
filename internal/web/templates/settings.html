@@ -1,0 +1,71 @@
+{{define "content"}}
+<section class="card">
+  <h3>ตารางเวลา</h3>
+  <form id="schedule" class="stack">
+    <label><input type="radio" name="mode" value="interval" {{if eq .Cfg.Schedule.Mode "interval"}}checked{{end}}>
+      ทุก <input type="number" name="every_hours" min="1" max="24" value="{{.Cfg.Schedule.EveryHours}}"> ชั่วโมง</label>
+    <label><input type="radio" name="mode" value="daily" {{if eq .Cfg.Schedule.Mode "daily"}}checked{{end}}>
+      ทุกวัน เวลา <input type="time" name="daily_at" value="{{.Cfg.Schedule.DailyAt}}"></label>
+    <label><input type="radio" name="mode" value="paused" {{if eq .Cfg.Schedule.Mode "paused"}}checked{{end}}>
+      หยุดชั่วคราว</label>
+    <p class="muted">ถ้าเครื่องปิดหรือหลับอยู่ตอนถึงเวลา จะสำรองให้ทันทีหลังเปิดบริการ · รอบถัดไป: <b data-next>{{.Next}}</b></p>
+    <div><button class="btn primary">บันทึกตารางเวลา</button></div>
+  </form>
+</section>
+
+<section class="card">
+  <h3>การอัปโหลด</h3>
+  <form id="upload" class="stack">
+    <label>จำนวนไฟล์ที่อัปโหลดพร้อมกัน
+      <input type="number" name="upload_workers" min="1" max="8" value="{{.Cfg.UploadWorkers}}"> (1–8)</label>
+    <label>จำกัดความเร็วอัปโหลด (KB/s, 0 = ไม่จำกัด)
+      <input type="number" name="upload_limit_kbps" min="0" step="1" value="{{.Cfg.UploadLimitKBps}}" class="kbps"></label>
+    <p class="muted">อัปโหลดหลายไฟล์พร้อมกันช่วยให้ไฟล์เล็กจำนวนมากเสร็จเร็วขึ้นมาก ·
+      จำนวนไฟล์มีผลตั้งแต่รอบถัดไป ส่วนความเร็วมีผลทันทีแม้กำลังสำรองอยู่ (รวมทุกไฟล์, 1 KB = 1024 ไบต์)</p>
+    <div><button class="btn primary">บันทึกการอัปโหลด</button></div>
+  </form>
+</section>
+
+<section class="card" id="drive-card">
+  <h3>โฟลเดอร์หลักบน Google Drive</h3>
+  {{if not .Cfg.DriveFolderID}}
+    <p id="no-drive-folder"><span class="dot bad"></span>ยังไม่ได้ตั้งค่าโฟลเดอร์ปลายทางบน Google Drive —
+      สร้างโฟลเดอร์บน Drive แล้วนำ ID มาใส่ด้านล่าง (จะยังไม่สำรองข้อมูลจนกว่าจะตั้งค่า)</p>
+  {{end}}
+  <form id="drive" class="stack">
+    <label>Folder ID <input type="text" name="folder_id" value="{{.Cfg.DriveFolderID}}" spellcheck="false" class="wide" placeholder="เช่น 1AbCdEfGhIjKlMnOpQrStUvWxYz"></label>
+    <p class="muted">ID คือส่วนท้ายของ URL <code>drive.google.com/drive/folders/&lt;ID&gt;</code> ·
+      เปลี่ยนแล้วรอบถัดไปจะสร้างดัชนีใหม่สำหรับโฟลเดอร์ใหม่ (โฟลเดอร์เดิมบน Drive ไม่ถูกแตะ)</p>
+    <div class="row">
+      <button type="button" class="btn" data-test-drive>ทดสอบการเข้าถึง</button>
+      <button class="btn primary">บันทึก</button>
+      <span id="drive-test" class="muted"></span>
+    </div>
+  </form>
+</section>
+
+<section class="card">
+  <h3>บัญชี Google</h3>
+  {{if not .Auth.HasCredentials}}
+    <p><span class="dot bad"></span>ไม่พบ <code>{{.Paths.CredentialsFile}}</code> — รัน <code>install.sh</code> เพื่อนำเข้า OAuth client</p>
+  {{else if .Auth.Connected}}
+    <p><span class="dot ok"></span>เชื่อมต่อแล้ว{{if .Auth.Email}}: <b>{{.Auth.Email}}</b>{{end}}</p>
+    <button class="btn danger" data-disconnect>ยกเลิกการเชื่อมต่อ</button>
+    <p class="muted">การยกเลิกจะลบ token ในเครื่องนี้เท่านั้น</p>
+  {{else}}
+    {{if .Auth.Error}}<p><span class="dot bad"></span>{{.Auth.Error}}</p>
+    {{else}}<p><span class="dot bad"></span>ยังไม่ได้เชื่อมต่อ</p>{{end}}
+    <a class="btn primary" href="/oauth/start">เชื่อมต่อบัญชี Google</a>
+    <p class="muted">จะเปิดหน้า Google ให้อนุญาตสิทธิ์ แล้วกลับมาที่ <code>127.0.0.1:8095</code> (ต้องเปิดเบราว์เซอร์บนเครื่องนี้)</p>
+  {{end}}
+</section>
+
+<section class="card">
+  <h3>ไฟล์ของระบบ</h3>
+  <ul class="kv">
+    <li><span>ตั้งค่า</span><code>{{.Paths.ConfigFile}}</code></li>
+    <li><span>ข้อมูลสถานะ</span><code>{{.Paths.StateDB}}</code></li>
+    <li><span>log</span><code>{{.Paths.LogFile}}</code></li>
+  </ul>
+</section>
+{{end}}

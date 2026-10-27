@@ -1,0 +1,44 @@
+{{define "content"}}
+<section class="card">
+  <h3>โฟลเดอร์ที่สำรอง</h3>
+  <p class="muted">แต่ละโฟลเดอร์จะไปอยู่ใต้โฟลเดอร์หลักบน Drive ตาม path เทียบกับ <code>~</code>
+    (เช่น <code>~/Documents/Personal</code> → <code>Documents/Personal</code>; นอก <code>~</code> → <code>_root/…</code>)</p>
+  {{if .Cfg.Sources}}
+  <ul class="list">
+    {{range .Cfg.Sources}}
+    <li>
+      <span class="path">{{tilde .}}</span>
+      <span class="muted" data-preview-out="{{.}}"></span>
+      <span class="row">
+        <button class="btn small" data-preview="{{.}}">ดูขนาด</button>
+        <button class="btn small danger" data-remove="{{.}}">นำออก</button>
+      </span>
+    </li>
+    {{end}}
+  </ul>
+  <p class="muted">นำโฟลเดอร์ออกจากรายการแล้ว สำเนาบน Google Drive จะยังอยู่ ไม่ถูกลบ</p>
+  {{else}}<p class="muted">ยังไม่ได้เลือกโฟลเดอร์</p>{{end}}
+</section>
+
+<section class="card">
+  <h3>เพิ่มโฟลเดอร์</h3>
+  <div id="browser" data-start="{{.Paths.Home}}">
+    <div class="row">
+      <button class="btn small" data-browse-up>⬆ ขึ้นไป</button>
+      <code id="browse-path"></code>
+    </div>
+    <ul class="list dirs" id="browse-list"></ul>
+    <button class="btn primary" data-browse-pick>เพิ่มโฟลเดอร์นี้</button>
+  </div>
+</section>
+
+<section class="card">
+  <h3>รูปแบบที่ไม่สำรอง (exclude)</h3>
+  <p class="muted">บรรทัดละหนึ่งรูปแบบ (glob) · ลงท้ายด้วย <code>/</code> = เฉพาะโฟลเดอร์ ·
+    ไม่มี <code>/</code> = เทียบกับชื่อไฟล์ทุกระดับ · มี <code>/</code> = เทียบกับ path จากโฟลเดอร์ต้นทาง ·
+    ไฟล์ที่เคยสำรองไว้แล้วและตรงกับรูปแบบใหม่จะถูกย้ายไปถังขยะบน Drive</p>
+  <textarea id="excludes" rows="9" spellcheck="false">{{range .Cfg.Excludes}}{{.}}
+{{end}}</textarea>
+  <button class="btn primary" data-save-excludes>บันทึก</button>
+</section>
+{{end}}

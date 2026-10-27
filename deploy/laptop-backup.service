@@ -1,0 +1,16 @@
+[Unit]
+Description=laptop-backup: mirror folders to Google Drive (UI on 127.0.0.1:8095)
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/laptop-backup
+Restart=on-failure
+RestartSec=10
+# Stay out of the way of interactive work.
+Nice=10
+IOSchedulingClass=idle
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=default.target

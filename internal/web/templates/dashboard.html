@@ -1,0 +1,74 @@
+{{define "content"}}
+{{if not .Cfg.DriveFolderID}}
+<div class="flash bad" id="no-drive-folder">ยังไม่ได้ตั้งค่าโฟลเดอร์ปลายทางบน Google Drive —
+  <a href="/settings#drive-card">ไปที่หน้าตั้งค่า</a> เพื่อใส่ Folder ID ก่อนสำรองข้อมูล</div>
+{{end}}
+<section class="cards">
+  <div class="card">
+    <h3>บัญชี Google</h3>
+    {{if .Auth.Connected}}
+      <p><span class="dot ok"></span>เชื่อมต่อแล้ว{{if .Auth.Email}}: <b>{{.Auth.Email}}</b>{{end}}</p>
+    {{else if .Auth.Error}}
+      <p><span class="dot bad"></span>{{.Auth.Error}}</p>
+      <a class="btn" href="/oauth/start">เชื่อมต่อใหม่</a>
+    {{else}}
+      <p id="not-connected"><span class="dot bad"></span>ยังไม่ได้เชื่อมต่อ (not connected)</p>
+      {{if .Auth.HasCredentials}}<a class="btn" href="/oauth/start">เชื่อมต่อบัญชี Google</a>
+      {{else}}<p class="muted">ไม่พบ <code>credentials.json</code> — รัน <code>install.sh</code> ก่อน</p>{{end}}
+    {{end}}
+  </div>
+  <div class="card">
+    <h3>รอบถัดไป</h3>
+    <p class="big" data-next>{{.Next}}</p>
+    <p class="muted">{{len .Cfg.Sources}} โฟลเดอร์ · <a href="/settings">เปลี่ยนตาราง</a></p>
+  </div>
+  <div class="card">
+    <h3>สั่งงาน</h3>
+    <div class="row">
+      <button class="btn primary" data-action="run" {{if .Run.Running}}hidden{{end}}>สำรองข้อมูลตอนนี้</button>
+      <button class="btn danger" data-action="cancel" {{if not .Run.Running}}hidden{{end}}>ยกเลิก</button>
+      <button class="btn" data-action="full" {{if .Run.Running}}hidden{{end}}
+        title="สร้างดัชนีใหม่จาก Drive แล้วซิงก์">สแกนใหม่ทั้งหมด</button>
+    </div>
+  </div>
+</section>
+
+<section class="card" id="progress" {{if not .Run.Running}}hidden{{end}}>
+  <h3>กำลังสำรองข้อมูล <span class="muted" data-p="phase"></span></h3>
+  <p class="paused" data-p="paused" {{if not .Run.Stats.Paused}}hidden{{end}}>หยุดชั่วคราว: รออินเทอร์เน็ตกลับมา แล้วจะทำไฟล์นี้ต่อเอง</p>
+  <div class="stats">
+    <div><b data-p="scanned">{{.Run.Stats.Scanned}}</b><span>ตรวจแล้ว</span></div>
+    <div><b data-p="uploaded">{{.Run.Stats.Uploaded}}</b><span>อัปโหลดใหม่</span></div>
+    <div><b data-p="updated">{{.Run.Stats.Updated}}</b><span>อัปเดต</span></div>
+    <div><b data-p="trashed">{{.Run.Stats.Trashed}}</b><span>ย้ายไปถังขยะ</span></div>
+    <div><b data-p="errors">{{.Run.Stats.Errors}}</b><span>ผิดพลาด</span></div>
+    <div><b data-p="bytes">{{bytes .Run.Stats.Bytes}}</b><span>ส่งแล้ว</span></div>
+  </div>
+  <p class="current" data-p="current">{{.Run.Stats.Current}}</p>
+</section>
+
+<section class="card">
+  <h3>ประวัติการสำรอง</h3>
+  {{if .Runs}}
+  {{/* The first page is rendered here; app.js appends older pages from
+       /api/runs while scrolling and builds rows with the same markup. */}}
+  <div class="scroll history" id="history">
+  <table>
+    <thead><tr><th>เริ่ม</th><th>สถานะ</th><th>ใหม่</th><th>อัปเดต</th><th>ถังขยะ</th><th>ผิดพลาด</th><th>ขนาด</th><th>ใช้เวลา</th></tr></thead>
+    <tbody id="history-rows" data-cursor="{{.RunsNext}}">
+    {{range .Runs}}
+      <tr data-run="{{.ID}}">
+        <td>{{when .Started}}<br><small class="muted">{{trigger .Trigger}}</small></td>
+        <td><span class="badge {{.Status}}">{{status .Status}}</span>{{if .Message}}<br><small class="muted">{{.Message}}</small>{{end}}</td>
+        <td>{{.Uploaded}}</td><td>{{.Updated}}</td><td>{{.Trashed}}</td>
+        <td>{{if .Errors}}<a href="/logs?run={{.ID}}">{{.Errors}}</a>{{else}}0{{end}}</td>
+        <td>{{bytes .Bytes}}</td><td>{{duration .Duration}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+    <tfoot><tr><td colspan="8" id="history-more" class="muted">{{if not .RunsNext}}แสดงครบทุกรายการแล้ว{{end}}</td></tr></tfoot>
+  </table>
+  </div>
+  {{else}}<p class="muted">ยังไม่เคยสำรองข้อมูล</p>{{end}}
+</section>
+{{end}}

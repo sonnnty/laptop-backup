@@ -1,0 +1,28 @@
+{{define "content"}}
+<section class="card">
+  <h3>ข้อผิดพลาดของแต่ละรอบ</h3>
+  {{if .Runs}}
+  <div class="row wrap">
+    {{range .Runs}}
+      <a class="chip {{if eq .ID $.SelRun}}on{{end}}" href="/logs?run={{.ID}}">#{{.ID}} {{when .Started}}
+        {{if .Errors}}<b class="bad">{{.Errors}}</b>{{end}}</a>
+    {{end}}
+  </div>
+  {{if .RunErrors}}
+  <div class="scroll">
+    <table>
+      <thead><tr><th>เวลา</th><th>ไฟล์</th><th>ข้อผิดพลาด</th></tr></thead>
+      <tbody>
+      {{range .RunErrors}}<tr><td>{{when .At}}</td><td class="path">{{tilde .Path}}</td><td>{{.Error}}</td></tr>{{end}}
+      </tbody>
+    </table>
+  </div>
+  {{else}}<p class="muted">รอบ #{{.SelRun}} ไม่มีข้อผิดพลาด</p>{{end}}
+  {{else}}<p class="muted">ยังไม่มีประวัติ</p>{{end}}
+</section>
+
+<section class="card">
+  <h3>log ของบริการ <button class="btn small" data-reload-log>รีเฟรช</button></h3>
+  <pre id="log" class="log">กำลังโหลด…</pre>
+</section>
+{{end}}
