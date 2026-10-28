@@ -108,6 +108,14 @@ th { color: var(--muted); font-weight: 500; white-space: nowrap; }
 .seg.st-success { fill: var(--ok); } .seg.st-partial { fill: var(--warn); }
 .seg.st-failed, .seg.st-interrupted { fill: var(--bad); } .seg.st-cancelled { fill: var(--muted); }
 .mark-err { fill: var(--bad); }
+.chart-svg .ln { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.ln.s-acc { stroke: var(--accent); } .ln.s-new { stroke: var(--c-new); } .ln.s-upd { stroke: var(--c-upd); }
+.ln.s-del { stroke: var(--c-del); } .ln.base { stroke: var(--muted); stroke-opacity: .45; stroke-width: 1.5; }
+.area-fill { fill: var(--accent); fill-opacity: .14; stroke: none; }
+.dot-pt { stroke: var(--card); stroke-width: 1.2; }
+.dot-pt.s-acc { fill: var(--accent); } .dot-pt.s-new { fill: var(--c-new); } .dot-pt.s-upd { fill: var(--c-upd); }
+.dot-pt.s-del { fill: var(--c-del); } .dot-pt.st-success { fill: var(--ok); } .dot-pt.st-partial { fill: var(--warn); }
+.dot-pt.st-failed, .dot-pt.st-interrupted { fill: var(--bad); } .dot-pt.st-cancelled { fill: var(--muted); }
 .chart-tip { position: absolute; z-index: 5; pointer-events: none; width: max-content; max-width: min(20rem, 100%);
   background: var(--text); color: var(--card); padding: .35rem .6rem; border-radius: 6px; font-size: .8rem;
   line-height: 1.45; word-break: break-all; box-shadow: 0 2px 8px rgba(0, 0, 0, .25); }

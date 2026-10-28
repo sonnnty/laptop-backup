@@ -163,14 +163,15 @@ const Charts = (() => {
     box.replaceChildren(html("p", "muted empty", text));
   }
 
-  // --- vertical (stacked) bars ---------------------------------------------
-  // o: {items:[{label, segs:[{v, cls}], tip:[...], mark}], unit, fmt, aria}
+  // --- line chart ----------------------------------------------------------
+  // o: {items:[{label, segs:[{v, cls}], tip:[...], mark}], unit, fmt, aria,
+  //     line: class of a single neutral line (dots then take each seg's cls), area}
+  // Each segs index is one series drawn as its own line across the items.
 
-  function vbars(w, o) {
-    const h = o.h > 0 ? Math.max(o.h, 70) : 210, m = { l: 56, r: 8, t: 16, b: 24 };
+  function lines(w, o) {
+    const h = o.h > 0 ? Math.max(o.h, 70) : 210, m = { l: 56, r: 10, t: 16, b: 24 };
     const iw = w - m.l - m.r, ih = h - m.t - m.b;
-    const sum = (it) => it.segs.reduce((a, s) => a + s.v, 0);
-    const max = Math.max(0, ...o.items.map(sum));
+    const max = Math.max(0, ...o.items.flatMap((it) => it.segs.map((s) => s.v)));
     const all = ticks(max, o.unit);
     const top = all[all.length - 1];
     // A short plot (dashboard fitted to the screen) labels only zero and the top.
@@ -183,18 +184,28 @@ const Charts = (() => {
       svg.append(svgEl("text", { class: "tick", x: m.l - 6, y: y(v) + 3.5, "text-anchor": "end" }, o.fmt(v)));
     }
 
-    const n = o.items.length, slot = iw / n, bw = Math.max(2, Math.min(slot * 0.72, 40));
+    const n = o.items.length, slot = iw / n;
+    const x = (i) => m.l + (i + 0.5) * slot;
+    const series = o.items[0].segs.length;
+    for (let k = 0; k < series; k++) {
+      const pts = o.items.map((it, i) => `${x(i).toFixed(1)},${y(it.segs[k].v).toFixed(1)}`);
+      const cls = o.line || o.items[0].segs[k].cls;
+      if (o.area) {
+        svg.append(svgEl("path", { class: "area-fill " + cls, d: `M${x(0)},${y(0)}L${pts.join("L")}L${x(n - 1)},${y(0)}Z` }));
+      }
+      svg.append(svgEl("path", { class: "ln " + cls, d: "M" + pts.join("L") }));
+    }
+    const dots = slot >= 7;
     const every = Math.ceil(46 / slot); // thin the date labels out
     o.items.forEach((it, i) => {
-      const cx = m.l + (i + 0.5) * slot;
-      let base = m.t + ih;
-      for (const s of it.segs) {
-        if (s.v <= 0) continue;
-        const sh = Math.max((s.v / top) * ih, 1);
-        base -= sh;
-        svg.append(svgEl("rect", { class: "seg " + s.cls, x: cx - bw / 2, y: base, width: bw, height: sh }));
+      const cx = x(i);
+      if (dots || o.line) {
+        for (const s of it.segs) svg.append(svgEl("circle", { class: "dot-pt " + s.cls, cx, cy: y(s.v), r: o.line ? 3.2 : 2.4 }));
       }
-      if (it.mark) svg.append(svgEl("circle", { class: "mark-err", cx, cy: base - 6, r: 3.3 }));
+      if (it.mark) {
+        const hi = Math.min(...it.segs.map((s) => y(s.v)));
+        svg.append(svgEl("circle", { class: "mark-err", cx, cy: Math.max(hi - 8, 4), r: 3.3 }));
+      }
       if ((n - 1 - i) % every === 0) {
         // The last label would be cut off by the right edge: right-align it.
         const atEdge = cx + 20 > w;
@@ -211,12 +222,12 @@ const Charts = (() => {
     const total = days.reduce((a, d) => a + d.bytes, 0);
     if (!total) return note(box, "ยังไม่มีข้อมูล");
     const peak = days.reduce((a, d) => (d.bytes > a.bytes ? d : a));
-    const aria = `แผนภูมิแท่ง: ปริมาณที่อัปโหลดต่อวัน ${days.length} วันล่าสุด รวม ${bytes(total)} ` +
+    const aria = `กราฟเส้น: ปริมาณที่อัปโหลดต่อวัน ${days.length} วันล่าสุด รวม ${bytes(total)} ` +
       `มากที่สุด ${bytes(peak.bytes)} ในวันที่ ${longDate(peak.day)}`;
     mount(box, (w, h) => {
       const unit = byteUnit(peak.bytes);
-      return vbars(w, {
-        unit, aria, h, fmt: (v) => bytes(v, true),
+      return lines(w, {
+        unit, aria, h, area: true, fmt: (v) => bytes(v, true),
         items: days.map((d) => ({
           label: shortDate(d.day), segs: [{ v: d.bytes, cls: "s-acc" }],
           tip: [longDate(d.day), "อัปโหลด " + bytes(d.bytes)],
@@ -230,9 +241,9 @@ const Charts = (() => {
   function changes(box, runs) {
     if (!runs.length) return note(box, "ยังไม่มีข้อมูล");
     const sum = (k) => runs.reduce((a, r) => a + r[k], 0);
-    const aria = `แผนภูมิแท่งซ้อน: ไฟล์ต่อรอบ ${runs.length} รอบล่าสุด อัปโหลดใหม่ ${sum("uploaded")} ` +
+    const aria = `กราฟเส้น: ไฟล์ต่อรอบ ${runs.length} รอบล่าสุด อัปโหลดใหม่ ${sum("uploaded")} ` +
       `อัปเดต ${sum("updated")} ย้ายไปถังขยะ ${sum("trashed")} รอบที่มีข้อผิดพลาด ${runs.filter((r) => r.errors).length}`;
-    mount(box, (w, h) => vbars(w, {
+    mount(box, (w, h) => lines(w, {
       unit: 1, aria, h, fmt: count,
       items: runs.map((r) => ({
         label: runLabel(r),
@@ -248,14 +259,14 @@ const Charts = (() => {
   function durations(box, runs) {
     if (!runs.length) return note(box, "ยังไม่มีข้อมูล");
     const longest = runs.reduce((a, r) => (r.duration_sec > a.duration_sec ? r : a));
-    const aria = `แผนภูมิแท่ง: ระยะเวลาต่อรอบ ${runs.length} รอบล่าสุด นานที่สุด ${duration(longest.duration_sec)} ` +
+    const aria = `กราฟเส้น: ระยะเวลาต่อรอบ ${runs.length} รอบล่าสุด นานที่สุด ${duration(longest.duration_sec)} ` +
       `(รอบ #${longest.id}) สีแสดงสถานะ`;
     mount(box, (w, h) => {
       const max = longest.duration_sec;
       const unit = max < 120 ? 1 : max < 7200 ? 60 : 3600;
       const suffix = { 1: "s", 60: "m", 3600: "h" }[unit];
-      return vbars(w, {
-        unit, aria, h, fmt: (v) => v / unit + suffix,
+      return lines(w, {
+        unit, aria, h, line: "base", fmt: (v) => v / unit + suffix,
         items: runs.map((r) => ({
           label: runLabel(r),
           segs: [{ v: r.duration_sec, cls: "st-" + (STATUSES.includes(r.status) ? r.status : "cancelled") }],
