@@ -257,7 +257,8 @@ func TestDashboardUsageSection(t *testing.T) {
 	if strings.Contains(js, "innerHTML") || strings.Contains(js, "insertAdjacentHTML") {
 		t.Error("charts.js builds markup from strings")
 	}
-	if strings.Contains(js, "https://") || strings.Contains(js, "http://") {
+	// The SVG namespace is an identifier, not a request.
+	if strings.Contains(js, "https://") || strings.Contains(strings.ReplaceAll(js, "http://www.w3.org/2000/svg", ""), "http://") {
 		t.Error("charts.js references an external URL")
 	}
 }
