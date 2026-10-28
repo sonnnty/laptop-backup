@@ -60,7 +60,7 @@ var funcs = template.FuncMap{
 // Handler builds the HTTP handler.
 func (s *Server) Handler() (http.Handler, error) {
 	s.pages = map[string]*template.Template{}
-	for _, p := range []string{"dashboard", "folders", "settings", "logs"} {
+	for _, p := range []string{"dashboard", "history", "folders", "settings", "logs"} {
 		t, err := template.New("layout.html").Funcs(funcs).Funcs(template.FuncMap{"tilde": s.tilde}).
 			ParseFS(assets, "templates/layout.html", "templates/"+p+".html")
 		if err != nil {
@@ -75,6 +75,7 @@ func (s *Server) Handler() (http.Handler, error) {
 	// Browsers ask for /favicon.ico on their own; send them to the SVG.
 	mux.Handle("GET /favicon.ico", http.RedirectHandler("/static/favicon.svg", http.StatusMovedPermanently))
 	mux.HandleFunc("GET /{$}", s.page("dashboard"))
+	mux.HandleFunc("GET /history", s.page("history"))
 	mux.HandleFunc("GET /folders", s.page("folders"))
 	mux.HandleFunc("GET /settings", s.page("settings"))
 	mux.HandleFunc("GET /logs", s.page("logs"))
@@ -127,7 +128,8 @@ type pageData struct {
 	Run      bsync.Status
 	Next     string
 	Runs     []index.Run
-	RunsNext string // /api/runs cursor after Runs on the dashboard ("" = all shown)
+	RunsNext string     // /api/runs cursor after Runs on the history page ("" = all shown)
+	LastRun  *index.Run // newest finished run, for the dashboard summary
 	Paths    config.Paths
 	Msg, Err string
 	// Logs page
@@ -148,15 +150,24 @@ func (s *Server) page(name string) http.HandlerFunc {
 			Err:   r.URL.Query().Get("err"),
 		}
 		var err error
-		if name == "dashboard" {
+		switch name {
+		case "history":
 			// First page of the history; the rest is fetched while scrolling.
 			var more bool
 			if d.Runs, more, err = s.Index.RunsBefore(0, runsPageSize); err != nil {
 				s.Log.Error("recent runs", "err", err)
 			}
 			d.RunsNext = runsCursor(d.Runs, more)
-		} else if d.Runs, err = s.Index.RecentRuns(30); err != nil {
-			s.Log.Error("recent runs", "err", err)
+		case "dashboard":
+			if last, err := s.Index.FinishedRuns(1); err != nil {
+				s.Log.Error("last run", "err", err)
+			} else if len(last) > 0 {
+				d.LastRun = &last[0]
+			}
+		default:
+			if d.Runs, err = s.Index.RecentRuns(30); err != nil {
+				s.Log.Error("recent runs", "err", err)
+			}
 		}
 		if name == "logs" {
 			d.SelRun, _ = strconv.ParseInt(r.URL.Query().Get("run"), 10, 64)

@@ -81,11 +81,13 @@ async function poll() {
         $("[data-p=paused]").hidden = !run.stats.paused;
       }
     }
-    if (run.running !== wasRunning && document.body.dataset.page === "dashboard") {
+    if (run.running !== wasRunning) {
+      const page = document.body.dataset.page;
       // A run that ends can also revoke the Google connection; the auth
       // card is only rendered server-side.
-      if (!run.running && String(s.auth.connected) !== document.body.dataset.connected) location.reload();
-      else refreshHistory().catch(() => {});
+      if (page === "dashboard" && !run.running && String(s.auth.connected) !== document.body.dataset.connected) location.reload();
+      else if (page === "history") refreshHistory().catch(() => {});
+      else if (page === "dashboard" && !run.running) refreshLastRun().catch(() => {});
     }
     wasRunning = run.running;
     if (run.running) delay = 2000;
@@ -97,9 +99,11 @@ async function poll() {
 if (!document.hidden) poll();
 else document.addEventListener("visibilitychange", poll, { once: true });
 
-// --- dashboard: run history ---------------------------------------------
+// --- history page: run history -------------------------------------------
 // The server renders the first page; older pages come from /api/runs when
 // the sentinel row at the bottom of the scroll box comes into view.
+// The tbody carries data-cursor (not data-next, which is the next-run label
+// that poll() overwrites on every tick): keep these selectors distinct.
 const histBox = $("#history");
 const histRows = $("#history-rows");
 const histMore = $("#history-more");
@@ -115,7 +119,7 @@ function el(tag, cls, text) {
 
 const rowFor = (id) => histRows.querySelector(`tr[data-run="${Number(id)}"]`);
 
-// runRow builds the same row as {{range .Runs}} in dashboard.html, with
+// runRow builds the same row as {{range .Runs}} in history.html, with
 // textContent only: run messages may contain anything.
 function runRow(r) {
   const tr = el("tr");
@@ -204,6 +208,34 @@ async function refreshHistory() {
   const height = histBox.scrollHeight;
   histRows.prepend(...fresh);
   if (histBox.scrollTop > 0) histBox.scrollTop += histBox.scrollHeight - height;
+}
+
+// --- dashboard: last run summary ----------------------------------------
+// lastRunBody builds the same nodes as #last-run-body in dashboard.html.
+function lastRunBody(r) {
+  const badge = el("span", "badge", r.status_label);
+  if (/^[a-z]+$/.test(r.status)) badge.classList.add(r.status);
+  const when = el("span", "", r.started + " ");
+  when.append(el("small", "muted", "· " + r.trigger_label));
+  const counts = el("span", "muted", `ใหม่ ${r.uploaded} · อัปเดต ${r.updated} · ถังขยะ ${r.trashed} · ผิดพลาด `);
+  if (r.errors) {
+    const a = el("a", "", String(r.errors));
+    a.href = "/logs?run=" + encodeURIComponent(r.id);
+    counts.append(a);
+  } else {
+    counts.append("0");
+  }
+  const out = [badge, when, counts, el("span", "muted", r.size + " · " + r.duration)];
+  if (r.message) out.push(el("small", "muted lr-msg", r.message));
+  return out;
+}
+
+async function refreshLastRun() {
+  const body = $("#last-run-body");
+  if (!body) return;
+  const d = await getRuns("?limit=5");
+  const r = d.runs.find((x) => x.status !== "running");
+  if (r) body.replaceChildren(...lastRunBody(r));
 }
 
 // --- folders -----------------------------------------------------------

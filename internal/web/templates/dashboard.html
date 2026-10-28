@@ -47,28 +47,18 @@
   <p class="current" data-p="current">{{.Run.Stats.Current}}</p>
 </section>
 
-<section class="card">
-  <h3>ประวัติการสำรอง</h3>
-  {{if .Runs}}
-  {{/* The first page is rendered here; app.js appends older pages from
-       /api/runs while scrolling and builds rows with the same markup. */}}
-  <div class="scroll history" id="history">
-  <table>
-    <thead><tr><th>เริ่ม</th><th>สถานะ</th><th>ใหม่</th><th>อัปเดต</th><th>ถังขยะ</th><th>ผิดพลาด</th><th>ขนาด</th><th>ใช้เวลา</th></tr></thead>
-    <tbody id="history-rows" data-cursor="{{.RunsNext}}">
-    {{range .Runs}}
-      <tr data-run="{{.ID}}">
-        <td>{{when .Started}}<br><small class="muted">{{trigger .Trigger}}</small></td>
-        <td><span class="badge {{.Status}}">{{status .Status}}</span>{{if .Message}}<br><small class="muted">{{.Message}}</small>{{end}}</td>
-        <td>{{.Uploaded}}</td><td>{{.Updated}}</td><td>{{.Trashed}}</td>
-        <td>{{if .Errors}}<a href="/logs?run={{.ID}}">{{.Errors}}</a>{{else}}0{{end}}</td>
-        <td>{{bytes .Bytes}}</td><td>{{duration .Duration}}</td>
-      </tr>
-    {{end}}
-    </tbody>
-    <tfoot><tr><td colspan="8" id="history-more" class="muted">{{if not .RunsNext}}แสดงครบทุกรายการแล้ว{{end}}</td></tr></tfoot>
-  </table>
+<section class="card" id="last-run">
+  <h3>รอบล่าสุด <a class="more" href="/history">ดูประวัติทั้งหมด →</a></h3>
+  {{/* Server-rendered; app.js rebuilds #last-run-body (lastRunBody) when a run finishes. */}}
+  <div id="last-run-body">
+  {{with .LastRun}}
+    <span class="badge {{.Status}}">{{status .Status}}</span>
+    <span>{{when .Started}} <small class="muted">· {{trigger .Trigger}}</small></span>
+    <span class="muted">ใหม่ {{.Uploaded}} · อัปเดต {{.Updated}} · ถังขยะ {{.Trashed}} ·
+      ผิดพลาด {{if .Errors}}<a href="/logs?run={{.ID}}">{{.Errors}}</a>{{else}}0{{end}}</span>
+    <span class="muted">{{bytes .Bytes}} · {{duration .Duration}}</span>
+    {{if .Message}}<small class="muted lr-msg">{{.Message}}</small>{{end}}
+  {{else}}<span class="muted">ยังไม่เคยสำรองข้อมูล</span>{{end}}
   </div>
-  {{else}}<p class="muted">ยังไม่เคยสำรองข้อมูล</p>{{end}}
 </section>
 {{end}}

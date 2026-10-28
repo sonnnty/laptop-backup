@@ -82,7 +82,7 @@ func do(h http.Handler, method, target, body string, header bool) *httptest.Resp
 
 func TestPagesRenderWhenNotConnected(t *testing.T) {
 	_, h := newServer(t)
-	for _, p := range []string{"/", "/folders", "/settings", "/logs", "/static/app.js"} {
+	for _, p := range []string{"/", "/history", "/folders", "/settings", "/logs", "/static/app.js"} {
 		w := do(h, "GET", p, "", false)
 		if w.Code != 200 {
 			t.Fatalf("GET %s = %d: %s", p, w.Code, w.Body)
@@ -344,18 +344,88 @@ func TestAPIRunsPagination(t *testing.T) {
 		}
 	}
 
-	// The dashboard renders the first page and hands the cursor to the JS.
-	body := do(h, "GET", "/", "", false).Body.String()
+	// The history page renders the first page and hands the cursor to the JS.
+	body := do(h, "GET", "/history", "", false).Body.String()
 	if !strings.Contains(body, `data-cursor="111"`) || strings.Count(body, `data-run=`) != runsPageSize {
-		t.Fatalf("dashboard history: %d rows, cursor missing", strings.Count(body, `data-run=`))
+		t.Fatalf("history page: %d rows, cursor missing", strings.Count(body, `data-run=`))
 	}
 }
 
-func TestDashboardHistoryEnd(t *testing.T) {
+// navLink returns the <a> tag of the nav entry for href.
+func navLink(t *testing.T, body, href string) string {
+	t.Helper()
+	nav := body[strings.Index(body, "<nav>"):strings.Index(body, "</nav>")]
+	i := strings.Index(nav, `<a href="`+href+`"`)
+	if i < 0 {
+		t.Fatalf("nav lacks %s:\n%s", href, nav)
+	}
+	return nav[i : i+strings.Index(nav[i:], ">")]
+}
+
+func TestHistoryTabAndDashboardSummary(t *testing.T) {
+	s, h := newServer(t)
+	if body := do(h, "GET", "/history", "", false).Body.String(); !strings.Contains(body, "ยังไม่เคยสำรองข้อมูล") ||
+		strings.Contains(body, `id="history-rows"`) {
+		t.Fatalf("empty history page:\n%s", body)
+	}
+	if body := do(h, "GET", "/", "", false).Body.String(); !strings.Contains(body, "ยังไม่เคยสำรองข้อมูล") {
+		t.Fatalf("empty dashboard summary:\n%s", body)
+	}
+
+	t0 := time.Date(2026, 10, 1, 8, 0, 0, 0, time.Local)
+	for i := range 3 {
+		id, _ := s.Index.StartRun("manual", t0.Add(time.Duration(i)*time.Hour))
+		s.Index.FinishRun(index.Run{ID: id, Status: index.StatusSuccess, Finished: t0.Add(time.Duration(i)*time.Hour + 2*time.Minute), Uploaded: 7 + i, Bytes: 2048})
+	}
+	s.Index.StartRun("schedule", t0.Add(10*time.Hour)) // still running: not the "last finished" run
+
+	hist := do(h, "GET", "/history", "", false).Body.String()
+	for _, p := range []string{"/", "/history", "/folders", "/settings", "/logs"} {
+		got := navLink(t, hist, p)
+		if on := strings.Contains(got, `class="on"`); on != (p == "/history") {
+			t.Errorf("nav %s on history page: %s", p, got)
+		}
+	}
+	if !strings.Contains(hist, ">ประวัติ</a>") || strings.Index(hist, `href="/history"`) > strings.Index(hist, `href="/folders"`) ||
+		strings.Index(hist, `href="/"`) > strings.Index(hist, `href="/history"`) {
+		t.Errorf("tab ประวัติ is not between ภาพรวม and โฟลเดอร์")
+	}
+	if !strings.Contains(hist, `id="history-rows" data-cursor=""`) || strings.Count(hist, `data-run=`) != 4 {
+		t.Errorf("history page rows: %d", strings.Count(hist, `data-run=`))
+	}
+	// The next-run label attribute must never appear on the history element.
+	if strings.Contains(hist, "data-next") {
+		t.Error("history page uses data-next, which the live poll overwrites")
+	}
+
+	dash := do(h, "GET", "/", "", false).Body.String()
+	if got := navLink(t, dash, "/"); !strings.Contains(got, `class="on"`) {
+		t.Errorf("dashboard nav: %s", got)
+	}
+	if strings.Contains(navLink(t, dash, "/history"), `class="on"`) {
+		t.Error("history tab highlighted on the dashboard")
+	}
+	for _, gone := range []string{`id="history"`, `id="history-rows"`, "data-cursor", "<table"} {
+		if strings.Contains(dash, gone) {
+			t.Errorf("dashboard still has the history table (%s)", gone)
+		}
+	}
+	// Summary of the newest *finished* run (#3), with a link to the history.
+	if !strings.Contains(dash, `href="/history">ดูประวัติทั้งหมด →`) || !strings.Contains(dash, "ใหม่ 9 ·") ||
+		!strings.Contains(dash, "2.0 KiB · 2m0s") || !strings.Contains(dash, "2026-10-01 10:00") {
+		t.Errorf("last-run summary missing:\n%s", dash)
+	}
+	// data-next is the live next-run label on the dashboard only.
+	if strings.Count(dash, "data-next") != 1 {
+		t.Errorf("data-next count = %d", strings.Count(dash, "data-next"))
+	}
+}
+
+func TestHistoryEnd(t *testing.T) {
 	s, h := newServer(t)
 	id, _ := s.Index.StartRun("manual", time.Now())
 	s.Index.FinishRun(index.Run{ID: id, Status: index.StatusSuccess, Finished: time.Now()})
-	body := do(h, "GET", "/", "", false).Body.String()
+	body := do(h, "GET", "/history", "", false).Body.String()
 	if !strings.Contains(body, `data-cursor=""`) || !strings.Contains(body, "แสดงครบทุกรายการแล้ว") {
 		t.Fatalf("single page history lacks the end marker:\n%s", body)
 	}
