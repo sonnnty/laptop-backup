@@ -46,7 +46,12 @@ type Server struct {
 	// Hosts are the accepted Host headers (DNS-rebinding protection).
 	Hosts []string
 
+	// QuotaWait bounds the Drive storage call behind /api/stats
+	// (0 = defaultQuotaWait).
+	QuotaWait time.Duration
+
 	pages map[string]*template.Template
+	stats statsCache
 }
 
 var funcs = template.FuncMap{
@@ -82,6 +87,7 @@ func (s *Server) Handler() (http.Handler, error) {
 
 	mux.HandleFunc("GET /api/status", s.apiStatus)
 	mux.HandleFunc("GET /api/runs", s.apiRuns)
+	mux.HandleFunc("GET /api/stats", s.apiStats)
 	mux.HandleFunc("POST /api/run", s.apiRun)
 	mux.HandleFunc("POST /api/cancel", s.apiCancel)
 	mux.HandleFunc("GET /api/browse", s.apiBrowse)
@@ -304,6 +310,18 @@ func (s *Server) apiRuns(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	ok(w, map[string]any{"runs": rows, "next": runsCursor(runs, more)})
+}
+
+// apiStats feeds the dashboard charts. The index scan and the Drive quota
+// come from caches (see stats.go); everything else is a cheap query.
+func (s *Server) apiStats(w http.ResponseWriter, r *http.Request) {
+	resp, err := s.buildStats(r.Context(), time.Now())
+	if err != nil {
+		s.Log.Error("stats", "err", err)
+		fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (s *Server) apiRun(w http.ResponseWriter, r *http.Request) {
