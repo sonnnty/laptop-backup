@@ -10,6 +10,7 @@
     --c-new: #5aa1f0; --c-upd: #f0b93e; --c-del: #a994e8; --track: #2a3037; }
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { margin: 0; background: var(--bg); color: var(--text); }
 header { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1.5rem; padding: .7rem 1.2rem;
   background: var(--card); border-bottom: 1px solid var(--line); }
@@ -116,8 +117,43 @@ th { color: var(--muted); font-weight: 500; white-space: nowrap; }
 .legend:empty { display: none; }
 .key { display: inline-flex; align-items: center; gap: .35rem; font-size: .82rem; color: var(--muted); }
 .swatch { width: 10px; height: 10px; flex: none; }
+.swatch .track { fill: var(--track); stroke: var(--line); }
 .quota-text { margin: 0 0 .5rem; font-weight: 600; }
 .speed { margin: .8rem 0 .2rem; }
 .speed h4 { margin: 0 0 .2rem; font-size: .95rem; }
 @media (max-width: 700px) { .charts { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 520px) { main { padding: .6rem; } .card { padding: .8rem; } }
+
+/* Dashboard fits one screen on a laptop or desktop: the charts take the height
+   left over, and their plots tell charts.js how tall to draw (--fit). Smaller
+   screens keep the normal scrolling page. */
+@media (min-width: 1000px) and (min-height: 600px) {
+  body[data-page=dashboard] { height: 100vh; height: 100dvh; display: flex; flex-direction: column; }
+  body[data-page=dashboard] main { flex: 1; min-height: 0; overflow-y: auto; width: 100%; max-width: 1500px;
+    display: flex; flex-direction: column; gap: .8rem; padding: .8rem 1rem; }
+  body[data-page=dashboard] main > * { margin: 0; flex: none; }
+  body[data-page=dashboard] .card { padding: .7rem .9rem; }
+  body[data-page=dashboard] h3 { margin-bottom: .35rem; }
+  .cards.top { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .8rem; }
+  .cards.top p { margin: .2rem 0; }
+  #usage { flex: 1 0 24rem; display: flex; flex-direction: column; gap: .8rem; }
+  #usage .sec { display: none; }
+  #usage .tiles { margin: 0; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .tiles div { padding: .35rem .7rem; }
+  .tiles b { font-size: 1.1rem; }
+  .charts { flex: 1; min-height: 0; grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: repeat(2, minmax(0, 1fr)); gap: .8rem; }
+  .chart { display: flex; flex-direction: column; min-height: 0; }
+  .chart > * { flex: none; }
+  .chart[data-chart=daily] { grid-column: 1 / 3; grid-row: 1; }
+  .chart[data-chart=changes] { grid-column: 1; grid-row: 2; }
+  .chart[data-chart=durations] { grid-column: 2; grid-row: 2; }
+  .chart[data-chart=sources] { grid-column: 3; grid-row: 1; }
+  .chart[data-chart=quota] { grid-column: 3; grid-row: 2; }
+  .chart .cap { margin: -.25rem 0 .3rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chart .legend { margin-top: .3rem; }
+  .chart .plot.bars { --fit: 1; flex: 1; min-height: 0; }
+  .chart .plot.bars > .chart-svg { position: absolute; inset: 0; height: 100%; }
+  .chart[data-chart=sources] .plot { flex: 0 1 auto; min-height: 0; overflow-y: auto; }
+  #progress .speed { margin-top: .4rem; }
+}

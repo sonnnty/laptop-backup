@@ -126,12 +126,18 @@ const Charts = (() => {
       for (const e of entries) {
         const box = e.target;
         const w = Math.floor(box.clientWidth);
-        if (box._build && w > 0 && w !== box._w) paint(box);
+        if (box._build && w > 0 && (w !== box._w || fitHeight(box) !== box._h)) paint(box);
       }
     })
     : null;
 
-  // mount draws build(width) into box and redraws when the width changes.
+  // fitHeight is the plot's height when the dashboard fits the screen (app.css
+  // sets --fit on the plot, which is then sized by the layout), else 0.
+  function fitHeight(box) {
+    return getComputedStyle(box).getPropertyValue("--fit").trim() === "1" ? Math.floor(box.clientHeight) : 0;
+  }
+
+  // mount draws build(width, height) into box and redraws when its size changes.
   // build returns an <svg>, or null for "no data".
   function mount(box, build) {
     box._build = build;
@@ -142,8 +148,9 @@ const Charts = (() => {
   function paint(box) {
     const w = Math.max(220, Math.floor(box.clientWidth) || 600);
     box._w = Math.floor(box.clientWidth);
+    box._h = fitHeight(box);
     box.replaceChildren();
-    const svg = box._build(w);
+    const svg = box._build(w, box._h);
     if (!svg) {
       box.append(html("p", "muted empty", "ยังไม่มีข้อมูล"));
       return;
@@ -160,12 +167,14 @@ const Charts = (() => {
   // o: {items:[{label, segs:[{v, cls}], tip:[...], mark}], unit, fmt, aria}
 
   function vbars(w, o) {
-    const h = 210, m = { l: 56, r: 8, t: 16, b: 24 };
+    const h = o.h > 0 ? Math.max(o.h, 70) : 210, m = { l: 56, r: 8, t: 16, b: 24 };
     const iw = w - m.l - m.r, ih = h - m.t - m.b;
     const sum = (it) => it.segs.reduce((a, s) => a + s.v, 0);
     const max = Math.max(0, ...o.items.map(sum));
-    const t = ticks(max, o.unit);
-    const top = t[t.length - 1];
+    const all = ticks(max, o.unit);
+    const top = all[all.length - 1];
+    // A short plot (dashboard fitted to the screen) labels only zero and the top.
+    const t = ih < 110 ? [all[0], top] : all;
     const y = (v) => m.t + ih - (v / top) * ih;
     const svg = svgEl("svg", { class: "chart-svg", viewBox: `0 0 ${w} ${h}`, role: "img", "aria-label": o.aria });
 
@@ -204,10 +213,10 @@ const Charts = (() => {
     const peak = days.reduce((a, d) => (d.bytes > a.bytes ? d : a));
     const aria = `แผนภูมิแท่ง: ปริมาณที่อัปโหลดต่อวัน ${days.length} วันล่าสุด รวม ${bytes(total)} ` +
       `มากที่สุด ${bytes(peak.bytes)} ในวันที่ ${longDate(peak.day)}`;
-    mount(box, (w) => {
+    mount(box, (w, h) => {
       const unit = byteUnit(peak.bytes);
       return vbars(w, {
-        unit, aria, fmt: (v) => bytes(v, true),
+        unit, aria, h, fmt: (v) => bytes(v, true),
         items: days.map((d) => ({
           label: shortDate(d.day), segs: [{ v: d.bytes, cls: "s-acc" }],
           tip: [longDate(d.day), "อัปโหลด " + bytes(d.bytes)],
@@ -223,8 +232,8 @@ const Charts = (() => {
     const sum = (k) => runs.reduce((a, r) => a + r[k], 0);
     const aria = `แผนภูมิแท่งซ้อน: ไฟล์ต่อรอบ ${runs.length} รอบล่าสุด อัปโหลดใหม่ ${sum("uploaded")} ` +
       `อัปเดต ${sum("updated")} ย้ายไปถังขยะ ${sum("trashed")} รอบที่มีข้อผิดพลาด ${runs.filter((r) => r.errors).length}`;
-    mount(box, (w) => vbars(w, {
-      unit: 1, aria, fmt: count,
+    mount(box, (w, h) => vbars(w, {
+      unit: 1, aria, h, fmt: count,
       items: runs.map((r) => ({
         label: runLabel(r),
         segs: [{ v: r.uploaded, cls: "s-new" }, { v: r.updated, cls: "s-upd" }, { v: r.trashed, cls: "s-del" }],
@@ -241,12 +250,12 @@ const Charts = (() => {
     const longest = runs.reduce((a, r) => (r.duration_sec > a.duration_sec ? r : a));
     const aria = `แผนภูมิแท่ง: ระยะเวลาต่อรอบ ${runs.length} รอบล่าสุด นานที่สุด ${duration(longest.duration_sec)} ` +
       `(รอบ #${longest.id}) สีแสดงสถานะ`;
-    mount(box, (w) => {
+    mount(box, (w, h) => {
       const max = longest.duration_sec;
       const unit = max < 120 ? 1 : max < 7200 ? 60 : 3600;
       const suffix = { 1: "s", 60: "m", 3600: "h" }[unit];
       return vbars(w, {
-        unit, aria, fmt: (v) => v / unit + suffix,
+        unit, aria, h, fmt: (v) => v / unit + suffix,
         items: runs.map((r) => ({
           label: runLabel(r),
           segs: [{ v: r.duration_sec, cls: "st-" + (STATUSES.includes(r.status) ? r.status : "cancelled") }],
