@@ -119,3 +119,112 @@ func TestRunsBefore(t *testing.T) {
 		t.Fatalf("RunsBefore(ids[3]) = %+v", runs)
 	}
 }
+
+func openTest(t *testing.T) *DB {
+	t.Helper()
+	db, err := Open(filepath.Join(t.TempDir(), "s.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	return db
+}
+
+func TestSourceUsage(t *testing.T) {
+	db := openTest(t)
+	for _, e := range []Entry{
+		{Path: "/a/b", IsDir: true, Size: 4096}, // the source folder itself: not a file
+		{Path: "/a/b/x", Size: 10},
+		{Path: "/a/b/sub", IsDir: true, Size: 4096},
+		{Path: "/a/b/sub/y", Size: 200},
+		// Siblings whose names sort right after "/a/b" must not be counted.
+		{Path: "/a/b.txt", Size: 1000}, {Path: "/a/b-x", Size: 1000}, {Path: "/a/b0", Size: 1000},
+		{Path: "/a/bc", IsDir: true}, {Path: "/a/bc/z", Size: 5000},
+		{Path: "/a/b/empty"},
+	} {
+		e.DriveID = "id" + e.Path
+		if err := db.Put(e, 1); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if u, err := db.SourceUsage("/a/b"); err != nil || u != (Usage{Files: 3, Bytes: 210}) {
+		t.Fatalf("/a/b = %+v, %v", u, err)
+	}
+	if u, _ := db.SourceUsage("/a/bc"); u != (Usage{Files: 1, Bytes: 5000}) {
+		t.Fatalf("/a/bc = %+v", u)
+	}
+	if u, _ := db.SourceUsage("/nothing"); u != (Usage{}) {
+		t.Fatalf("empty source = %+v", u)
+	}
+	if u, _ := db.SourceUsage("/"); u.Files != 7 {
+		t.Fatalf("/ = %+v", u)
+	}
+	if u, err := db.TotalUsage(); err != nil || u != (Usage{Files: 7, Bytes: 8210}) {
+		t.Fatalf("total = %+v, %v", u, err)
+	}
+}
+
+func TestBytesPerDay(t *testing.T) {
+	db := openTest(t)
+	now := time.Date(2026, 10, 28, 12, 0, 0, 0, time.Local)
+	add := func(started time.Time, status string, bytes int64) {
+		id, err := db.StartRun("schedule", started)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := db.FinishRun(Run{ID: id, Status: status, Finished: started.Add(time.Minute), Bytes: bytes}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	add(now, StatusSuccess, 100)                                               // today
+	add(now.Add(-3*time.Hour), StatusPartial, 50)                              // today, earlier
+	add(time.Date(2026, 10, 27, 0, 0, 0, 0, time.Local), StatusSuccess, 7)     // yesterday, first instant
+	add(time.Date(2026, 10, 26, 23, 59, 59, 0, time.Local), StatusFailed, 3)   // 2 days ago, last instant
+	add(time.Date(2026, 10, 24, 9, 0, 0, 0, time.Local), StatusSuccess, 1000)  // 4 days ago
+	add(time.Date(2026, 9, 28, 23, 59, 0, 0, time.Local), StatusSuccess, 9999) // before the 30-day window
+	add(time.Date(2026, 9, 29, 0, 0, 1, 0, time.Local), StatusSuccess, 5)      // first day of the window
+
+	got, err := db.BytesPerDay(now, 30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 30 {
+		t.Fatalf("%d days", len(got))
+	}
+	if first := got[0].Day; first.Format("2006-01-02") != "2026-09-29" || got[29].Day.Format("2006-01-02") != "2026-10-28" {
+		t.Fatalf("range %v .. %v", first, got[29].Day)
+	}
+	want := map[string]int64{"2026-09-29": 5, "2026-10-24": 1000, "2026-10-26": 3, "2026-10-27": 7, "2026-10-28": 150}
+	var total int64
+	for _, d := range got {
+		key := d.Day.Format("2006-01-02")
+		if d.Bytes != want[key] {
+			t.Errorf("%s = %d, want %d", key, d.Bytes, want[key])
+		}
+		total += d.Bytes
+	}
+	if total != 1165 {
+		t.Errorf("total %d (a run outside the window was counted?)", total)
+	}
+	if empty, _ := openTest(t).BytesPerDay(now, 3); len(empty) != 3 || empty[0].Bytes != 0 {
+		t.Errorf("empty db: %+v", empty)
+	}
+}
+
+func TestFinishedRunsAndCounts(t *testing.T) {
+	db := openTest(t)
+	base := time.Now().Add(-48 * time.Hour)
+	for i, st := range []string{StatusSuccess, StatusFailed, StatusPartial, StatusSuccess} {
+		id, _ := db.StartRun("manual", base.Add(time.Duration(i)*time.Hour))
+		db.FinishRun(Run{ID: id, Status: st, Finished: base.Add(time.Duration(i)*time.Hour + time.Minute)})
+	}
+	db.StartRun("manual", time.Now()) // still running: never charted
+	runs, err := db.FinishedRuns(3)
+	if err != nil || len(runs) != 3 || runs[0].ID != 2 || runs[2].ID != 4 {
+		t.Fatalf("FinishedRuns = %+v, %v", runs, err)
+	}
+	counts, err := db.RunCounts(base.Add(90 * time.Minute)) // excludes runs 1 and 2
+	if err != nil || len(counts) != 2 || counts[StatusPartial] != 1 || counts[StatusSuccess] != 1 {
+		t.Fatalf("RunCounts = %v, %v", counts, err)
+	}
+}
