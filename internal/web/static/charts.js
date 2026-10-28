@@ -86,21 +86,27 @@ const Charts = (() => {
       if (sel) sel.classList.remove("sel");
       sel = null;
     };
-    const show = (t) => {
+    // The tooltip is position: fixed and placed next to the pointer, then
+    // clamped to the window, so it never runs off the screen.
+    const show = (t, e) => {
       if (sel) sel.classList.remove("sel");
       sel = t;
       t.classList.add("sel");
       tip.replaceChildren(...t._tip.map((line, i) => html("div", i ? "" : "tip-h", line)));
       tip.hidden = false;
-      const b = box.getBoundingClientRect(), r = t.getBoundingClientRect();
-      const x = r.left + r.width / 2 - b.left - tip.offsetWidth / 2;
-      tip.style.left = Math.max(0, Math.min(x, b.width - tip.offsetWidth)) + "px";
-      const above = r.top - b.top - tip.offsetHeight - 6;
-      tip.style.top = (above >= 0 ? above : r.bottom - b.top + 6) + "px";
+      const r = t.getBoundingClientRect(), gap = 12, pad = 8;
+      const px = e && e.clientX ? e.clientX : r.left + r.width / 2;
+      const py = e && e.clientY ? e.clientY : r.top + r.height / 2;
+      const tw = tip.offsetWidth, th = tip.offsetHeight;
+      const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
+      const x = px - tw / 2;
+      const y = py - th - gap >= pad ? py - th - gap : py + gap;
+      tip.style.left = Math.max(pad, Math.min(x, vw - tw - pad)) + "px";
+      tip.style.top = Math.max(pad, Math.min(y, vh - th - pad)) + "px";
     };
     let pinned = false;
-    svg.addEventListener("pointerover", (e) => {
-      if (e.pointerType === "mouse" && e.target._tip && !pinned) show(e.target);
+    svg.addEventListener("pointermove", (e) => {
+      if (e.pointerType === "mouse" && e.target._tip && !pinned) show(e.target, e);
     });
     svg.addEventListener("pointerout", (e) => {
       if (e.pointerType === "mouse" && !pinned) hide();
@@ -108,7 +114,7 @@ const Charts = (() => {
     svg.addEventListener("click", (e) => {
       e.stopPropagation();
       closeOthers(tip);
-      if (e.target._tip && !(pinned && sel === e.target)) { pinned = true; show(e.target); } else { pinned = false; hide(); }
+      if (e.target._tip && !(pinned && sel === e.target)) { pinned = true; show(e.target, e); } else { pinned = false; hide(); }
     });
     tip._reset = () => { pinned = false; hide(); };
     box.append(svg, tip);
@@ -118,6 +124,8 @@ const Charts = (() => {
     document.querySelectorAll(".chart-tip").forEach((t) => { if (t !== keep && t._reset) t._reset(); });
   }
   document.addEventListener("click", () => closeOthers(null));
+  // A fixed tooltip would stay put while its chart scrolls away.
+  document.addEventListener("scroll", () => closeOthers(null), { capture: true, passive: true });
 
   // --- mounting and resizing ---------------------------------------------
 
