@@ -80,6 +80,10 @@ async function poll() {
         $("[data-p=phase]").textContent = phases[run.stats.phase] || "";
         $("[data-p=paused]").hidden = !run.stats.paused;
       }
+      if (typeof Charts !== "undefined") {
+        if (run.running) Charts.speed.push(run.stats.bytes);
+        else Charts.speed.reset();
+      }
     }
     if (run.running !== wasRunning) {
       const page = document.body.dataset.page;
@@ -87,7 +91,10 @@ async function poll() {
       // card is only rendered server-side.
       if (page === "dashboard" && !run.running && String(s.auth.connected) !== document.body.dataset.connected) location.reload();
       else if (page === "history") refreshHistory().catch(() => {});
-      else if (page === "dashboard" && !run.running) refreshLastRun().catch(() => {});
+      else if (page === "dashboard" && !run.running) {
+        refreshLastRun().catch(() => {});
+        loadStats(); // the finished run changed every chart
+      }
     }
     wasRunning = run.running;
     if (run.running) delay = 2000;
@@ -237,6 +244,25 @@ async function refreshLastRun() {
   const r = d.runs.find((x) => x.status !== "running");
   if (r) body.replaceChildren(...lastRunBody(r));
 }
+
+// --- dashboard: usage charts ---------------------------------------------
+// /api/stats is fetched once on load and again when the poll sees a run
+// finish; there is no timer on it.
+async function loadStats() {
+  if (typeof Charts === "undefined" || !$("#usage")) return;
+  const err = $("#usage-err");
+  try {
+    const res = await fetch("/api/stats", { cache: "no-store" });
+    const d = await res.json();
+    if (!res.ok || !d.ok) throw new Error(d.error || res.statusText);
+    err.hidden = true;
+    Charts.render(d);
+  } catch (e) {
+    err.hidden = false;
+  }
+}
+loadStats();
+$$("[data-reload-stats]").forEach((b) => b.addEventListener("click", loadStats));
 
 // --- folders -----------------------------------------------------------
 on("[data-remove]", "click", async (el) => {

@@ -24,6 +24,7 @@
   <div id="toast" class="flash" hidden></div>
   {{template "content" .}}
 </main>
-<script src="/static/app.js"></script>
+{{if eq .Page "dashboard"}}<script src="/static/charts.js"></script>
+{{end}}<script src="/static/app.js"></script>
 </body>
 </html>

@@ -231,3 +231,33 @@ func TestAPIStatsGuard(t *testing.T) {
 		t.Fatalf("POST /api/stats: %d", w.Code)
 	}
 }
+
+func TestDashboardUsageSection(t *testing.T) {
+	_, h := newServer(t)
+	dash := do(h, "GET", "/", "", false).Body.String()
+	for _, want := range []string{`id="usage"`, `data-chart="daily"`, `data-chart="changes"`, `data-chart="durations"`,
+		`data-chart="sources"`, `data-chart="quota"`, `data-chart="speed"`, `data-tile="files"`, `data-tile="db"`,
+		`<script src="/static/charts.js">`} {
+		if !strings.Contains(dash, want) {
+			t.Errorf("dashboard lacks %s", want)
+		}
+	}
+	if strings.Index(dash, "/static/charts.js") > strings.Index(dash, "/static/app.js") {
+		t.Error("charts.js must load before app.js")
+	}
+	if hist := do(h, "GET", "/history", "", false).Body.String(); strings.Contains(hist, "charts.js") {
+		t.Error("history page loads the chart code")
+	}
+	w := do(h, "GET", "/static/charts.js", "", false)
+	if w.Code != 200 || !strings.Contains(w.Header().Get("Content-Type"), "javascript") || !strings.Contains(w.Body.String(), "const Charts") {
+		t.Fatalf("charts.js: %d %q", w.Code, w.Header().Get("Content-Type"))
+	}
+	// Chart text comes from API data: it must never be parsed as markup.
+	js := do(h, "GET", "/static/charts.js", "", false).Body.String()
+	if strings.Contains(js, "innerHTML") || strings.Contains(js, "insertAdjacentHTML") {
+		t.Error("charts.js builds markup from strings")
+	}
+	if strings.Contains(js, "https://") || strings.Contains(js, "http://") {
+		t.Error("charts.js references an external URL")
+	}
+}
