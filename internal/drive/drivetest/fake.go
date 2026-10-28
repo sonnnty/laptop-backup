@@ -39,6 +39,11 @@ type Fake struct {
 	// calls overlap like real network round trips).
 	Latency time.Duration
 
+	// QuotaValue and QuotaErr are returned by Quota.
+	QuotaValue drive.Quota
+	QuotaErr   error
+	Quotas     int // calls to Quota
+
 	Creates, Updates, Trashes, Gets int
 	// MaxInFlight is the highest number of calls seen at the same time.
 	MaxInFlight int
@@ -225,6 +230,15 @@ func (f *Fake) List(ctx context.Context, folderID string, fn func(drive.File) er
 		}
 	}
 	return nil
+}
+
+func (f *Fake) Quota(ctx context.Context) (drive.Quota, error) {
+	if err := f.call(ctx); err != nil {
+		return drive.Quota{}, err
+	}
+	defer f.mu.Unlock()
+	f.Quotas++
+	return f.QuotaValue, f.QuotaErr
 }
 
 func (f *Fake) sortedChildren(parent string) []*node {

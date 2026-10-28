@@ -45,10 +45,15 @@ A local service that mirrors chosen folders on this Linux laptop 1:1 into one Go
 - “Backup now” button runs immediately.
 
 ## UI pages
-1. **Dashboard** — Google connection status, next scheduled run, current run progress (files scanned / uploaded / trashed / bytes, current file), last runs with counts, duration and errors; Backup now / Cancel.
-2. **Folders** — list of source folders with add (server-side directory browser starting at `$HOME`) and remove; exclude patterns editor; preview of size/file count per folder.
-3. **Settings** — schedule, upload workers and speed limit, Drive root folder ID (with “test access” button), Google connect/disconnect.
-4. **Logs** — tail of the service log and per-run error list.
+Top nav: ภาพรวม / ประวัติ / โฟลเดอร์ / ตั้งค่า / บันทึก.
+1. **Dashboard** (`/`) — Google connection status, next scheduled run, current run progress (files scanned / uploaded / trashed / bytes, current file, and a live upload-speed sparkline while a run is active), a compact summary of the last finished run with a link to History, Backup now / Cancel, and a **usage** section (“การใช้งาน”):
+   - stat tiles: files and total size in the backup, runs in the last 30 days with success rate, the service's own memory (`runtime.MemStats` HeapInuse; Sys as a tooltip), state DB size on disk;
+   - charts (inline SVG drawn by `static/charts.js`; no chart library, no CDN, no build step; `viewBox` follows the card width, one column under ~700px; colours are CSS variables for light/dark; hover or tap shows exact numbers; every chart has `role="img"` + `aria-label` and a “ยังไม่มีข้อมูล” empty state): bytes uploaded per local day (30 days, empty days included); files uploaded / updated / trashed for the last 30 finished runs with a marker on runs that had errors; duration of the last 30 runs coloured by status; backed-up size and file count per source folder; Google Drive storage meter (Drive / trash / other services / free; “unlimited” when Google reports no limit).
+   - data comes from `GET /api/stats` (JSON), loaded once on page load and again when the live poll sees a run finish (no timer). The index scan behind the per-source numbers (`path >= src+'/' AND path < src+'0'`, never LIKE) is cached in memory and redone only after a run finishes or the source list changes (at most once a minute while a run is active). The Drive quota (`about.get(fields=storageQuota)`) is cached for 10 minutes and fetched with a 2 s timeout, so `/api/stats` never waits on a slow Drive; on failure the last value is shown marked as old, else “ไม่สามารถดึงข้อมูลพื้นที่ได้” (or “ยังไม่ได้เชื่อมต่อ Google” when not connected).
+2. **History** (`/history`) — every run, newest first: status, counts, size, duration, error link. The first page is rendered by the server; older pages load from `GET /api/runs?before=<id>` (keyset pagination) while scrolling, and a run that finishes while the page is open is added without a reload. The history tbody carries `data-cursor`; `data-next` is reserved for the live “next run” label on the dashboard.
+3. **Folders** — list of source folders with add (server-side directory browser starting at `$HOME`) and remove; exclude patterns editor; preview of size/file count per folder.
+4. **Settings** — schedule, upload workers and speed limit, Drive root folder ID (with “test access” button), Google connect/disconnect.
+5. **Logs** — tail of the service log and per-run error list.
 - Thai-friendly, clean UI; works on a narrow window too.
 
 ## Integration with the laptop

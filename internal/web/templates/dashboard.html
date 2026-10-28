@@ -44,31 +44,68 @@
     <div><b data-p="errors">{{.Run.Stats.Errors}}</b><span>ผิดพลาด</span></div>
     <div><b data-p="bytes">{{bytes .Run.Stats.Bytes}}</b><span>ส่งแล้ว</span></div>
   </div>
+  <div class="speed" data-chart="speed" hidden>
+    <h4>ความเร็วอัปโหลด <span class="muted" data-speed-now></span></h4>
+    <p class="muted cap">ความเร็วเฉลี่ยระหว่างรอบการตรวจ (ราว 60 ครั้งล่าสุด) คำนวณจากขนาดไฟล์ที่ส่งเสร็จแล้ว</p>
+    <div class="plot"></div>
+  </div>
   <p class="current" data-p="current">{{.Run.Stats.Current}}</p>
 </section>
 
-<section class="card">
-  <h3>ประวัติการสำรอง</h3>
-  {{if .Runs}}
-  {{/* The first page is rendered here; app.js appends older pages from
-       /api/runs while scrolling and builds rows with the same markup. */}}
-  <div class="scroll history" id="history">
-  <table>
-    <thead><tr><th>เริ่ม</th><th>สถานะ</th><th>ใหม่</th><th>อัปเดต</th><th>ถังขยะ</th><th>ผิดพลาด</th><th>ขนาด</th><th>ใช้เวลา</th></tr></thead>
-    <tbody id="history-rows" data-cursor="{{.RunsNext}}">
-    {{range .Runs}}
-      <tr data-run="{{.ID}}">
-        <td>{{when .Started}}<br><small class="muted">{{trigger .Trigger}}</small></td>
-        <td><span class="badge {{.Status}}">{{status .Status}}</span>{{if .Message}}<br><small class="muted">{{.Message}}</small>{{end}}</td>
-        <td>{{.Uploaded}}</td><td>{{.Updated}}</td><td>{{.Trashed}}</td>
-        <td>{{if .Errors}}<a href="/logs?run={{.ID}}">{{.Errors}}</a>{{else}}0{{end}}</td>
-        <td>{{bytes .Bytes}}</td><td>{{duration .Duration}}</td>
-      </tr>
-    {{end}}
-    </tbody>
-    <tfoot><tr><td colspan="8" id="history-more" class="muted">{{if not .RunsNext}}แสดงครบทุกรายการแล้ว{{end}}</td></tr></tfoot>
-  </table>
+<section class="card" id="last-run">
+  <h3>รอบล่าสุด <a class="more" href="/history">ดูประวัติทั้งหมด →</a></h3>
+  {{/* Server-rendered; app.js rebuilds #last-run-body (lastRunBody) when a run finishes. */}}
+  <div id="last-run-body">
+  {{with .LastRun}}
+    <span class="badge {{.Status}}">{{status .Status}}</span>
+    <span>{{when .Started}} <small class="muted">· {{trigger .Trigger}}</small></span>
+    <span class="muted">ใหม่ {{.Uploaded}} · อัปเดต {{.Updated}} · ถังขยะ {{.Trashed}} ·
+      ผิดพลาด {{if .Errors}}<a href="/logs?run={{.ID}}">{{.Errors}}</a>{{else}}0{{end}}</span>
+    <span class="muted">{{bytes .Bytes}} · {{duration .Duration}}</span>
+    {{if .Message}}<small class="muted lr-msg">{{.Message}}</small>{{end}}
+  {{else}}<span class="muted">ยังไม่เคยสำรองข้อมูล</span>{{end}}
   </div>
-  {{else}}<p class="muted">ยังไม่เคยสำรองข้อมูล</p>{{end}}
+</section>
+<section id="usage" aria-labelledby="usage-h">
+  <h2 class="sec" id="usage-h">การใช้งาน</h2>
+  <p class="flash bad" id="usage-err" hidden>โหลดสถิติไม่สำเร็จ <button class="linkish" type="button" data-reload-stats>ลองใหม่</button></p>
+  <div class="stats tiles">
+    <div><b data-tile="files">—</b><span>ไฟล์ที่สำรองไว้</span></div>
+    <div><b data-tile="bytes">—</b><span>ขนาดรวม</span></div>
+    <div><b data-tile="runs">—</b><span>รอบใน 30 วัน</span></div>
+    <div><b data-tile="mem">—</b><span>หน่วยความจำของบริการ</span></div>
+    <div><b data-tile="db">—</b><span>ฐานข้อมูลสถานะ</span></div>
+  </div>
+  <div class="charts">
+    <section class="card chart wide" data-chart="daily">
+      <h3>อัปโหลดต่อวัน</h3>
+      <p class="muted cap">ปริมาณข้อมูลที่อัปโหลดในแต่ละวัน ย้อนหลัง 30 วัน (รวมทุกรอบที่เริ่มในวันนั้น)</p>
+      <div class="plot"><p class="muted empty">กำลังโหลด…</p></div>
+    </section>
+    <section class="card chart" data-chart="changes">
+      <h3>ไฟล์ที่เปลี่ยนต่อรอบ</h3>
+      <p class="muted cap">จำนวนไฟล์ใน 30 รอบล่าสุด จุดแดง = รอบที่มีข้อผิดพลาด</p>
+      <div class="plot"><p class="muted empty">กำลังโหลด…</p></div>
+      <p class="legend"><span class="key"><svg class="swatch" viewBox="0 0 10 10" aria-hidden="true"><rect class="seg s-new" width="10" height="10" rx="2"/></svg>อัปโหลดใหม่</span><span class="key"><svg class="swatch" viewBox="0 0 10 10" aria-hidden="true"><rect class="seg s-upd" width="10" height="10" rx="2"/></svg>อัปเดต</span><span class="key"><svg class="swatch" viewBox="0 0 10 10" aria-hidden="true"><rect class="seg s-del" width="10" height="10" rx="2"/></svg>ย้ายไปถังขยะ</span><span class="key"><svg class="swatch" viewBox="0 0 10 10" aria-hidden="true"><circle class="mark-err" cx="5" cy="5" r="4"/></svg>มีข้อผิดพลาด</span></p>
+    </section>
+    <section class="card chart" data-chart="durations">
+      <h3>ระยะเวลาต่อรอบ</h3>
+      <p class="muted cap">เวลาที่ใช้ในแต่ละรอบ (30 รอบล่าสุด) สีตามสถานะของรอบ</p>
+      <div class="plot"><p class="muted empty">กำลังโหลด…</p></div>
+      <p class="legend"><span class="key"><svg class="swatch" viewBox="0 0 10 10" aria-hidden="true"><rect class="seg st-success" width="10" height="10" rx="2"/></svg>สำเร็จ</span><span class="key"><svg class="swatch" viewBox="0 0 10 10" aria-hidden="true"><rect class="seg st-partial" width="10" height="10" rx="2"/></svg>สำเร็จบางส่วน</span><span class="key"><svg class="swatch" viewBox="0 0 10 10" aria-hidden="true"><rect class="seg st-failed" width="10" height="10" rx="2"/></svg>ล้มเหลว / ถูกขัดจังหวะ</span><span class="key"><svg class="swatch" viewBox="0 0 10 10" aria-hidden="true"><rect class="seg st-cancelled" width="10" height="10" rx="2"/></svg>ยกเลิก</span></p>
+    </section>
+    <section class="card chart" data-chart="sources">
+      <h3>ข้อมูลที่สำรองไว้ตามโฟลเดอร์</h3>
+      <p class="muted cap">ขนาดรวมและจำนวนไฟล์ของแต่ละโฟลเดอร์ต้นทาง ตามดัชนีการสำรอง</p>
+      <div class="plot"><p class="muted empty">กำลังโหลด…</p></div>
+    </section>
+    <section class="card chart" data-chart="quota">
+      <h3>พื้นที่ Google Drive</h3>
+      <p class="muted cap">พื้นที่ที่ใช้ไปเทียบกับโควตาของบัญชี (รวม Gmail และ Photos)</p>
+      <p class="quota-text" data-quota-text></p>
+      <div class="plot"><p class="muted empty">กำลังโหลด…</p></div>
+      <p class="legend" data-quota-legend></p>
+    </section>
+  </div>
 </section>
 {{end}}

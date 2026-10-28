@@ -9,6 +9,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -268,6 +269,102 @@ func (d *DB) queryRuns(query string, args ...any) ([]Run, error) {
 			r.Finished = time.Unix(0, finished)
 		}
 		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// Usage is the number of files (folders excluded) and their total size.
+type Usage struct {
+	Files int64
+	Bytes int64
+}
+
+// SourceUsage sums the mirrored files below dir. It is a range scan on the
+// primary key (see subtree), never LIKE, so a sibling such as /a/bc is not
+// counted for /a/b and the index stays usable.
+func (d *DB) SourceUsage(dir string) (Usage, error) {
+	lo, hi := subtree(dir)
+	var u Usage
+	err := d.db.QueryRow(`SELECT count(*), coalesce(sum(size), 0) FROM files WHERE path>=? AND path<? AND is_dir=0`,
+		lo, hi).Scan(&u.Files, &u.Bytes)
+	return u, err
+}
+
+// TotalUsage sums every mirrored file in the index. It scans the whole
+// table, so callers cache it.
+func (d *DB) TotalUsage() (Usage, error) {
+	var u Usage
+	err := d.db.QueryRow(`SELECT count(*), coalesce(sum(size), 0) FROM files WHERE is_dir=0`).Scan(&u.Files, &u.Bytes)
+	return u, err
+}
+
+// DayBytes is the number of bytes uploaded by runs that started on Day
+// (local midnight).
+type DayBytes struct {
+	Day   time.Time
+	Bytes int64
+}
+
+// BytesPerDay returns days entries ending with the local day of now, oldest
+// first, summing runs.bytes by the local day of runs.started. Days without
+// runs are included with 0.
+func (d *DB) BytesPerDay(now time.Time, days int) ([]DayBytes, error) {
+	now = now.Local()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+	out := make([]DayBytes, days)
+	for i := range out {
+		// AddDate (not Add 24h) keeps local midnight across DST changes.
+		out[i].Day = today.AddDate(0, 0, i-days+1)
+	}
+	if days < 1 {
+		return out, nil
+	}
+	rows, err := d.db.Query(`SELECT started, bytes FROM runs WHERE started>=? AND bytes>0`, out[0].Day.UnixNano())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var started, n int64
+		if err := rows.Scan(&started, &n); err != nil {
+			return nil, err
+		}
+		t := time.Unix(0, started).Local()
+		day := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.Local)
+		// Whole calendar days between out[0] and day; +12h rounds across DST.
+		i := int(day.Sub(out[0].Day).Hours()+12) / 24
+		if i >= 0 && i < days {
+			out[i].Bytes += n
+		}
+	}
+	return out, rows.Err()
+}
+
+// FinishedRuns returns the last n runs that are no longer running, oldest
+// first (the order charts draw them in).
+func (d *DB) FinishedRuns(n int) ([]Run, error) {
+	runs, err := d.queryRuns(`SELECT `+runCols+` FROM runs WHERE status<>? ORDER BY id DESC LIMIT ?`, StatusRunning, n)
+	slices.Reverse(runs)
+	return runs, err
+}
+
+// RunCounts maps status to the number of finished runs that started at or
+// after since.
+func (d *DB) RunCounts(since time.Time) (map[string]int, error) {
+	rows, err := d.db.Query(`SELECT status, count(*) FROM runs WHERE started>=? AND status<>? GROUP BY status`,
+		since.UnixNano(), StatusRunning)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]int{}
+	for rows.Next() {
+		var s string
+		var n int
+		if err := rows.Scan(&s, &n); err != nil {
+			return nil, err
+		}
+		out[s] = n
 	}
 	return out, rows.Err()
 }

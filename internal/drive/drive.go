@@ -47,6 +47,19 @@ type Client interface {
 	Trash(ctx context.Context, id string) error
 	// List calls fn for every non-trashed child of folderID.
 	List(ctx context.Context, folderID string, fn func(File) error) error
+	// Quota reports the account's Drive storage (about.get storageQuota).
+	Quota(ctx context.Context) (Quota, error)
+}
+
+// Quota is the account's Drive storage in bytes.
+type Quota struct {
+	// Limit is 0 for accounts with unlimited storage.
+	Limit int64
+	// Usage is everything counted against the account (Drive, Photos, Gmail);
+	// InDrive is the Drive part of it and InTrash the trashed part of that.
+	Usage   int64
+	InDrive int64
+	InTrash int64
 }
 
 // ErrNotFound is returned when an ID no longer exists.
@@ -225,4 +238,17 @@ func (g *GDrive) List(ctx context.Context, folderID string, fn func(File) error)
 			}
 			return nil
 		}))
+}
+
+func (g *GDrive) Quota(ctx context.Context) (Quota, error) {
+	a, err := g.svc.About.Get().Fields("storageQuota").Context(ctx).Do()
+	if err != nil {
+		return Quota{}, wrap(err)
+	}
+	if a.StorageQuota == nil {
+		return Quota{}, errors.New("drive: no storageQuota in about response")
+	}
+	// limit is absent (0) for unlimited accounts.
+	q := a.StorageQuota
+	return Quota{Limit: q.Limit, Usage: q.Usage, InDrive: q.UsageInDrive, InTrash: q.UsageInDriveTrash}, nil
 }

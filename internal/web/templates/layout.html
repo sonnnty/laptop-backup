@@ -12,6 +12,7 @@
   <a class="brand" href="/">☁ laptop-backup</a>
   <nav>
     <a href="/" {{if eq .Page "dashboard"}}class="on"{{end}}>ภาพรวม</a>
+    <a href="/history" {{if eq .Page "history"}}class="on"{{end}}>ประวัติ</a>
     <a href="/folders" {{if eq .Page "folders"}}class="on"{{end}}>โฟลเดอร์</a>
     <a href="/settings" {{if eq .Page "settings"}}class="on"{{end}}>ตั้งค่า</a>
     <a href="/logs" {{if eq .Page "logs"}}class="on"{{end}}>บันทึก</a>
@@ -23,6 +24,7 @@
   <div id="toast" class="flash" hidden></div>
   {{template "content" .}}
 </main>
-<script src="/static/app.js"></script>
+{{if eq .Page "dashboard"}}<script src="/static/charts.js"></script>
+{{end}}<script src="/static/app.js"></script>
 </body>
 </html>
